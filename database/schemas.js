@@ -34,13 +34,11 @@ const DiscordGuild = new Schema({
     name: String,
     memberCount: Number,
     verificationLevel: String,
-    lastUpdated: Date
+    lastUpdated: Date,
+    followers: Array
 })
 
-mongoose.model('Event', Event)
-mongoose.model('DiscordGuild', DiscordGuild)
-
 module.exports = {
-    Event,
-    DiscordGuild
+    Event: mongoose.models.Event || mongoose.model('Event', Event),
+    DiscordGuild: mongoose.models.DiscordGuild || mongoose.model('DiscordGuild', DiscordGuild),
 }

@@ -2,33 +2,42 @@ const Discord = require('discord.js');
 const chalk = require('chalk')
 
 const { token } = require('../../../secure/discord/discord-creds')
-const { config } = require ('../../../resources/')
+const { config } = require ('../../../resources')
 
 const {
-    stats
+    stats, autosync, unsync,
+    infractions, bansync
 } = require('../commands');
-const language = require('../../../resources/language');
 
-class DiscordBot {
+const {
+    checkAutosync
+} = require('../jobs')
+
+const language = require('../../../resources/language');
+const RateLimiter = require('../../abstracts/RateLimiter')
+
+class DiscordBot extends RateLimiter {
     client
+    rateLimitQueue
 
     constructor() {
+        super()
         this.client = new Discord.Client()
+        this.rateLimitQueue = method => this.addToQueue(method)
+    }
+
+    start() {
         if (config.LOG) {
 			console.log(chalk.magenta(`»»» Establishing connection to Discord`))
 			console.time(chalk.magenta(`««« Connected to Discord`))
 		}
         this.client.on('ready', () => {
-            this.start()
             console.timeEnd(chalk.magenta(`««« Connected to Discord`))
+            this.watchBans()
+            this.watchBanRemoves()
+            this.watchCommands()
         })
         this.client.login(token)
-    }
-
-    start() {
-        this.watchBans()
-        this.watchBanRemoves()
-        this.watchCommands()
     }
 
     buildGuild(guild) {
@@ -69,6 +78,8 @@ class DiscordBot {
                 eventData.reason,
                 eventData.meta
             )
+
+            checkAutosync(guildData.id, user.id, this.client)
         })
     }
 
@@ -85,26 +96,40 @@ class DiscordBot {
                 eventData.reason,
                 eventData.meta
             )
+
+            checkAutosync(guildData.id, user.id, this.client, true)
         })
+    }
+
+    updateGuild(g) {
+        const guild = this.buildGuild(g)
+        global.r3kt.discordDBConn.updateGuild(guild)
     }
 
     exeIfAdmin(message, func) {
         const member = message.guild.member(message.author)
         const isAdministrator = member.hasPermission(['ADMINISTRATOR'])
         if (isAdministrator) {
+            this.updateGuild(message.guild)
             func()
         } else {
-            message.channel.send(`<@${message.author.id}> ${language.DISCORD.ADMIN_ONLY}`)
+            this.rateLimitQueue(() => 
+                message.channel.send(`<@${message.author.id}> ${language.DISCORD.ADMIN_ONLY}`)
+            )
         }
     }
 
     exeIfMod(message, func) {
         const member = message.guild.member(message.author)
         const isMod = member.hasPermission(['BAN_MEMBERS'])
+
         if (isMod) {
+            this.updateGuild(message.guild)
             func()
         } else {
-            message.channel.send(`<@${message.author.id}> ${language.DISCORD.MOD_ONLY}`)
+            this.rateLimitQueue(() => 
+                message.channel.send(`<@${message.author.id}> ${language.DISCORD.MOD_ONLY}`)
+            )
         }
     }
 
@@ -112,18 +137,25 @@ class DiscordBot {
         this.client.on('message', message => {
             // Global commands
             if (message.content.startsWith('!stats'))
-                stats(message.guild, message)
+                stats(message.guild, message, this.rateLimitQueue)
             // Admin commands
+            if (message.content.startsWith('!init'))
+                this.exeIfMod(message, () => {
+                    this.rateLimitQueue(() => 
+                        message.channel.send(language.DISCORD.INIT)
+                    )
+                })
+
             if (message.content.startsWith('!infractions'))
-                this.exeIfMod(message, () => console.log('infractions'))
+                this.exeIfMod(message, () => infractions(message, this.rateLimitQueue))
             if (message.content.startsWith('!lockdown'))
                 this.exeIfMod(message, () => console.log('lockdown'))
             if (message.content.startsWith('!autosync'))
-                this.exeIfAdmin(message, () => console.log('autosync'))
+                this.exeIfAdmin(message, () => autosync(message, this.rateLimitQueue))
             if (message.content.startsWith('!unsync'))
-                this.exeIfAdmin(message, () => console.log('unsync'))
+                this.exeIfAdmin(message, () => unsync(message, this.rateLimitQueue))
             if (message.content.startsWith('!bansync'))
-                this.exeIfAdmin(message, () => console.log('bansync'))
+                this.exeIfAdmin(message, () => bansync(message, this.rateLimitQueue, this.client))
         })
     }
 

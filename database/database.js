@@ -56,6 +56,58 @@ class Database {
         return this.connected
     }
 
+    async autoSync(followerId, guildId) {
+        const guildObj = await this.DiscordGuild.findOne({ id: guildId })
+        if (guildObj == null) return language.NOT_USING_R3KT
+        if (!guildObj.followers.includes(followerId)) {
+            guildObj.followers = [...guildObj.followers, followerId]
+            await guildObj.save((err) => {
+                if (err) console.warn('Error saving sync data to database!', err)
+            })
+            return `${language.DISCORD.AUTOSYNC} **${guildObj.name}**`
+        } else {
+            return `${language.DISCORD.ALREADY_SYNCED} **${guildObj.name}**`
+        }
+    }
+
+    async unSync(followerId, guildId) {
+        const guildObj = await this.DiscordGuild.findOne({ id: guildId })
+        if (guildObj == null) return language.NOT_USING_R3KT
+        if (guildObj.followers.includes(followerId)) {
+            guildObj.followers = [...guildObj.followers, followerId]
+            guildObj.followers = guildObj.followers
+                .filter(guild => guild !== followerId)
+            await guildObj.save((err) => {
+                if (err) console.warn('Error saving sync data to database!', err)
+            })
+            return `${language.DISCORD.UNSYNCED} **${guildObj.name}**`
+        } else {
+            return `${language.DISCORD.NOT_SYNCED} **${guildObj.name}**`
+        }
+    }
+
+    /**
+     * Update the guilds stats in the database
+     * @param {Object} guild formatted guild object
+     */
+    async updateGuild(guild) {
+        const guildObj = await this.DiscordGuild.findOne({ id: guild.id })
+        if (guildObj == null) {
+            const newGuild = new this.DiscordGuild(guild)
+            newGuild.save(e => {
+                if (e) console.log('Error saving guild', e)
+            })
+        } else {
+            guildObj.name = guild.name
+            guildObj.memberCount = guild.memberCount
+            guildObj.verificationLevel = guild.verificationLevel
+            guildObj.lastUpdated = Date.now()
+            guildObj.save(e => {
+                if (e) console.log('Error saving guild', e)
+            })
+        }
+    }
+
     /**
      * Write a new event to the database
      * @param {String} channel Channel the event happened on
@@ -86,6 +138,16 @@ class Database {
 
     /**
      * Get a list of staticstics both globally, and on the specified channel
+     * @param {Number} guildId guild ID to check for followers on
+     * @returns {Object} returns Guild
+     */
+    async getGuild(guildId) {
+        const guild = await this.DiscordGuild.findOne({ id: guildId })
+        return guild
+    }
+
+    /**
+     * Get a list of staticstics both globally, and on the specified channel
      * @param {String} channel channel to get statistics on
      * @returns {Object} list of stats
      */
@@ -98,6 +160,7 @@ class Database {
             globalBans
         }
     }
+
     /**
      * Get a list of bans on a specific channel
      * @param {String} channel channel to check bans on
@@ -105,11 +168,26 @@ class Database {
      * @param {Number} limit amount of bans to check
      * @returns {Array} returns an array
      */
-    async getBans(channel, platform, limit = 999) {
-        const query = { channel, type: 'BAN' }
+    async getBans(guild, platform, limit = 999) {
+        const query = { channel: guild, type: 'BAN' }
         if (platform != null) query.platform = platform
         const channelBans = await this.Event.find(query).limit(limit)
         return channelBans
+    }
+
+
+    /**
+     * Get a list of unbans on a specific channel
+     * @param {String} channel channel to check unbans on
+     * @param {String} platform platform to check for unbans on
+     * @param {Number} limit amount of unbans to check
+     * @returns {Array} returns an array
+     */
+    async getUnbans(guild, platform, limit = 999) {
+        const query = { channel: guild, type: 'UNBAN' }
+        if (platform != null) query.platform = platform
+        const channelUnbans = await this.Event.find(query).limit(limit)
+        return channelUnbans
     }
 
     /**
@@ -118,9 +196,9 @@ class Database {
      * @param {String} type Type of event to filter by (optional)
      * @returns {Array} returns array of events
      */
-    async getEvents(user, type) {
-        const query = { offender: utils.usernameUtil.strip(user) }
-        if (type != null) query.type = type
+    async getEvents(user, type = 'ANY') {
+        const query = { meta: { userID: user } }
+        if (type != 'ANY') query.type = type
         const events = await this.Event.find(query)
         return events
     }
