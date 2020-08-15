@@ -12,11 +12,15 @@ async function bansync(message, rateLimitQueue, client) {
     const guild = await global.r3kt.discordDBConn.getGuild(guildId)
     const guildBans = await global.r3kt.discordDBConn.getBans(guildId, 'DISCORD')
     const guildUnbans = await global.r3kt.discordDBConn.getUnbans(guildId, 'DISCORD')
-    console.log(`${message.author.username} syncing **${guildBans.length} ban(s)** with guild **${guild.name}**.`)
+    console.log(
+        chalk.green(
+            `${message.author.username} syncing ${guildBans.length} ban(s) with guild ${guild.name}.`
+        )
+    )
     rateLimitQueue(() => {
         message.channel.send(`Syncing **${guildBans.length} ban(s)** with guild **${guild.name}**.`)
     })
-    guildBans.forEach(ban => {
+    guildBans.forEach((ban, i) => {
         rateLimitQueue(() => {
             const g = client.guilds.cache.get(message.guild.id)
             g.members
@@ -25,17 +29,23 @@ async function bansync(message, rateLimitQueue, client) {
                     console.log(chalk.yellow(`Failed to ban ${ban.meta.userID}`))
                 })
         })
+        console.log(guildId)
+        if(i === guildBans.length - 1) {
+            processUnbans()
+        }
     })
-    guildUnbans.forEach(unban => {
-        rateLimitQueue(() => {
-            const g = client.guilds.cache.get(message.guild.id)
-            g.members
-                .unban(unban.meta.userID, 'R3KT Unban Sync')
-                .catch(err => {
-                    console.log(chalk.yellow(`Failed to unban ${unban.meta.userID}`))
-                })
+    function processUnbans() {
+        guildUnbans.forEach(unban => {
+            rateLimitQueue(() => {
+                const g = client.guilds.cache.get(message.guild.id)
+                g.members
+                    .unban(unban.meta.userID, 'R3KT Unban Sync')
+                    .catch(err => {
+                        console.log(chalk.yellow(`Failed to unban ${unban.meta.userID}`))
+                    })
+            })
         })
-    })
+    }
 }
 
 module.exports = bansync
