@@ -28,7 +28,7 @@ async function bansync(message, rateLimitQueue, client) {
     })
     guildUnbans.forEach(unban => {
         rateLimitQueue(() => {
-            const g = client.guilds.cache.get(guildId)
+            const g = client.guilds.cache.get(message.guild.id)
             g.members
                 .unban(unban.meta.userID, 'R3KT Unban Sync')
                 .catch(err => {
