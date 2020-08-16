@@ -22,14 +22,12 @@ async function bansync(message, rateLimitQueue, client) {
     })
     guildBans.forEach((ban, i) => {
         rateLimitQueue(() => {
-            const g = client.guilds.cache.get(message.guild.id)
-            g.members
+            message.guild.members
                 .ban(ban.meta.userID, { reason: 'R3KT Ban Sync'})
                 .catch(err => {
                     console.log(chalk.yellow(`Failed to ban ${ban.meta.userID}`))
                 })
         })
-        console.log(guildId)
         if(i === guildBans.length - 1) {
             processUnbans()
         }
@@ -37,8 +35,7 @@ async function bansync(message, rateLimitQueue, client) {
     function processUnbans() {
         guildUnbans.forEach(unban => {
             rateLimitQueue(() => {
-                const g = client.guilds.cache.get(message.guild.id)
-                g.members
+                message.guild.members
                     .unban(unban.meta.userID, 'R3KT Unban Sync')
                     .catch(err => {
                         console.log(chalk.yellow(`Failed to unban ${unban.meta.userID}`))
