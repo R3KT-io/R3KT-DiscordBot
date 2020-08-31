@@ -60,7 +60,11 @@ class DiscordBot extends RateLimiter {
             reason: null,
             type,
             meta: {
-                userID: user.id
+                userID: user.id,
+                guild: {
+                    name: guild.name,
+                    id: guild.id
+                }
             }
         }
     }
